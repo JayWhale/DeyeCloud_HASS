@@ -3,7 +3,7 @@
   "name": "Deye Cloud",
   "codeowners": ["@JayWhale"],
   "config_flow": true,
-  "documentation": "https://github.com/yourusername/deye_cloud",
+  "documentation": "https://github.com/JayWhale/DeyeCloud_HASS",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "requirements": ["aiohttp>=3.8.0"],
