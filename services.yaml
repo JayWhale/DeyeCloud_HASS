@@ -1,0 +1,58 @@
+# Optional: Add this file for better service documentation in Home Assistant
+# This file provides descriptions for the services used by the integration
+
+# Battery Charge Mode Control
+switch_turn_on:
+  name: Enable Battery Charge Mode
+  description: Enable battery charging mode for the inverter
+  target:
+    entity:
+      domain: switch
+      integration: deye_cloud
+
+switch_turn_off:
+  name: Disable Battery Charge Mode
+  description: Disable battery charging mode for the inverter
+  target:
+    entity:
+      domain: switch
+      integration: deye_cloud
+
+# Work Mode Selection
+select_select_option:
+  name: Set Work Mode
+  description: Change the system work mode
+  target:
+    entity:
+      domain: select
+      integration: deye_cloud
+  fields:
+    option:
+      name: Work Mode
+      description: The work mode to set
+      required: true
+      selector:
+        select:
+          options:
+            - "SELLING_FIRST"
+            - "ZERO_EXPORT_TO_LOAD"
+            - "ZERO_EXPORT_TO_CT"
+
+# Energy Pattern Selection  
+select_select_option:
+  name: Set Energy Pattern
+  description: Change the energy pattern priority
+  target:
+    entity:
+      domain: select
+      integration: deye_cloud
+  fields:
+    option:
+      name: Energy Pattern
+      description: The energy pattern to set
+      required: true
+      selector:
+        select:
+          options:
+            - "BATTERY_FIRST"
+            - "LOAD_FIRST"
