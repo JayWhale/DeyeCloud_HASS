@@ -1,4 +1,5 @@
 """Deye Cloud API Client."""
+import asyncio
 import logging
 import hashlib
 import time
@@ -88,8 +89,8 @@ class DeyeCloudClient:
                         response.raise_for_status()
                         result = await response.json()
 
-            # Check API response code
-            if result.get("code") != 0:
+            # Check API response code (0 and 1000000 are success codes)
+            if result.get("code") not in [0, 1000000]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("API error: %s (code: %s)", error_msg, result.get("code"))
                 if result.get("code") in [1001, 1002, 1003]:  # Auth errors
@@ -130,7 +131,7 @@ class DeyeCloudClient:
                     response.raise_for_status()
                     result = await response.json()
 
-            if result.get("code") != 0:
+            if result.get("code") not in [0, 1000000]:  # Both 0 and 1000000 appear to be success
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("Token error: %s (code: %s)", error_msg, result.get("code"))
                 raise DeyeCloudAuthError(error_msg)
