@@ -6,9 +6,27 @@ DOMAIN = "deye_cloud"
 # Config
 CONF_APP_ID = "app_id"
 CONF_APP_SECRET = "app_secret"
+CONF_EMAIL = "email"
+CONF_PASSWORD = "password"
+CONF_REGION = "region"
 
 # Defaults
 DEFAULT_SCAN_INTERVAL = 60  # seconds
+
+# Regions
+REGION_EU = "eu"
+REGION_US = "us"
+
+REGIONS = {
+    REGION_EU: {
+        "name": "Europe, EMEA, Asia-Pacific",
+        "base_url": "https://eu1-developer.deyecloud.com/v1.0",
+    },
+    REGION_US: {
+        "name": "Americas",
+        "base_url": "https://us1-developer.deyecloud.com/v1.0",
+    },
+}
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.SELECT]
