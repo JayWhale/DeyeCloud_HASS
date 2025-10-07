@@ -13,10 +13,14 @@ from .api import DeyeCloudApiError, DeyeCloudClient
 from .const import (
     CONF_APP_ID,
     CONF_APP_SECRET,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_REGION,
     COORDINATOR,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     PLATFORMS,
+    REGIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,11 +28,21 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Deye Cloud from a config entry."""
+    region = entry.data[CONF_REGION]
+    base_url = REGIONS[region]["base_url"]
     app_id = entry.data[CONF_APP_ID]
     app_secret = entry.data[CONF_APP_SECRET]
+    email = entry.data[CONF_EMAIL]
+    password = entry.data[CONF_PASSWORD]
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
 
-    client = DeyeCloudClient(app_id=app_id, app_secret=app_secret)
+    client = DeyeCloudClient(
+        base_url=base_url,
+        app_id=app_id,
+        app_secret=app_secret,
+        email=email,
+        password=password,
+    )
 
     # Test connection
     try:
