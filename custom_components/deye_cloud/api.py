@@ -131,22 +131,27 @@ class DeyeCloudClient:
                     response.raise_for_status()
                     result = await response.json()
 
-            if result.get("code") not in [0, 1000000]:  # Both 0 and 1000000 appear to be success
+            _LOGGER.debug("Token response: code=%s, msg=%s", result.get("code"), result.get("msg"))
+
+            # Check for success (Deye uses both 0 and 1000000 as success codes)
+            if result.get("code") not in [0, 1000000]:
                 error_msg = result.get("msg", "Unknown error")
-                _LOGGER.error("Token error: %s (code: %s)", error_msg, result.get("code"))
-                raise DeyeCloudAuthError(error_msg)
+                error_code = result.get("code")
+                _LOGGER.error("Token request failed: %s (code: %s)", error_msg, error_code)
+                raise DeyeCloudAuthError(f"{error_msg} (code: {error_code})")
 
             data = result.get("data", {})
             self._access_token = data.get("access_token")
+            
+            if not self._access_token:
+                _LOGGER.error("No access token in response data: %s", data)
+                raise DeyeCloudAuthError("Failed to obtain access token - no token in response")
             
             # Token expires after 60 days according to docs
             expires_in = 60 * 24 * 60 * 60  # 60 days in seconds
             self._token_expiry = time.time() + expires_in - 86400  # Refresh 1 day early
             
-            if not self._access_token:
-                raise DeyeCloudAuthError("Failed to obtain access token")
-            
-            _LOGGER.debug("Access token obtained successfully")
+            _LOGGER.debug("Access token obtained successfully, expires in %d days", expires_in // 86400)
             return self._access_token
 
         except aiohttp.ClientError as err:
@@ -271,7 +276,16 @@ class DeyeCloudClient:
     async def test_connection(self) -> bool:
         """Test if the connection is working."""
         try:
+            _LOGGER.debug("Testing connection to Deye Cloud API")
             await self.obtain_token()
+            _LOGGER.debug("Connection test successful")
             return True
-        except DeyeCloudApiError:
+        except DeyeCloudAuthError as err:
+            _LOGGER.error("Authentication failed during connection test: %s", err)
+            return False
+        except DeyeCloudApiError as err:
+            _LOGGER.error("API error during connection test: %s", err)
+            return False
+        except Exception as err:
+            _LOGGER.error("Unexpected error during connection test: %s", err)
             return False
