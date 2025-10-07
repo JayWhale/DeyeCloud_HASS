@@ -8,7 +8,6 @@ import async_timeout
 
 _LOGGER = logging.getLogger(__name__)
 
-API_BASE_URL = "https://api.deyecloud.com"
 API_TIMEOUT = 30
 
 
@@ -25,13 +24,19 @@ class DeyeCloudClient:
 
     def __init__(
         self,
+        base_url: str,
         app_id: str,
         app_secret: str,
+        email: str,
+        password: str,
         session: Optional[aiohttp.ClientSession] = None,
     ) -> None:
         """Initialize the client."""
+        self.base_url = base_url
         self.app_id = app_id
         self.app_secret = app_secret
+        self.email = email
+        self.password_hash = hashlib.sha256(password.encode()).hexdigest().lower()
         self._session = session
         self._close_session = False
         self._access_token: Optional[str] = None
@@ -44,14 +49,6 @@ class DeyeCloudClient:
             self._close_session = True
         return self._session
 
-    def _generate_sign(self, data: Dict[str, Any]) -> str:
-        """Generate signature for API request."""
-        # Sort keys and concatenate
-        sorted_params = sorted(data.items())
-        sign_str = "".join(f"{k}{v}" for k, v in sorted_params)
-        sign_str = f"{self.app_secret}{sign_str}{self.app_secret}"
-        return hashlib.sha256(sign_str.encode()).hexdigest()
-
     async def _request(
         self,
         method: str,
@@ -61,27 +58,16 @@ class DeyeCloudClient:
     ) -> Dict[str, Any]:
         """Make API request."""
         session = await self._get_session()
-        url = f"{API_BASE_URL}{endpoint}"
+        url = f"{self.base_url}{endpoint}"
 
         if data is None:
             data = {}
-
-        # Add timestamp and app_id
-        timestamp = str(int(time.time() * 1000))
-        request_data = {
-            "appId": self.app_id,
-            "timestamp": timestamp,
-            **data,
-        }
 
         # Add access token if required and available
         if require_auth:
             if not self._access_token or time.time() >= self._token_expiry:
                 await self.obtain_token()
-            request_data["access_token"] = self._access_token
-
-        # Generate signature
-        request_data["sign"] = self._generate_sign(request_data)
+            data["access_token"] = self._access_token
 
         headers = {
             "Content-Type": "application/json",
@@ -91,13 +77,13 @@ class DeyeCloudClient:
             async with async_timeout.timeout(API_TIMEOUT):
                 if method.upper() == "GET":
                     async with session.get(
-                        url, params=request_data, headers=headers
+                        url, params=data, headers=headers
                     ) as response:
                         response.raise_for_status()
                         result = await response.json()
                 else:
                     async with session.post(
-                        url, json=request_data, headers=headers
+                        url, json=data, headers=headers
                     ) as response:
                         response.raise_for_status()
                         result = await response.json()
@@ -122,33 +108,66 @@ class DeyeCloudClient:
     async def obtain_token(self) -> str:
         """Obtain access token."""
         _LOGGER.debug("Obtaining new access token")
-        result = await self._request(
-            "POST", "/v1.0/account/token", require_auth=False
-        )
         
-        self._access_token = result.get("access_token")
-        expires_in = result.get("expires_in", 7200)  # Default 2 hours
-        self._token_expiry = time.time() + expires_in - 300  # Refresh 5 min early
+        # Token endpoint requires appId as query parameter
+        url = f"{self.base_url}/account/token?appId={self.app_id}"
         
-        if not self._access_token:
-            raise DeyeCloudAuthError("Failed to obtain access token")
+        request_data = {
+            "appSecret": self.app_secret,
+            "email": self.email,
+            "password": self.password_hash,
+        }
+
+        session = await self._get_session()
         
-        _LOGGER.debug("Access token obtained successfully")
-        return self._access_token
+        try:
+            async with async_timeout.timeout(API_TIMEOUT):
+                async with session.post(
+                    url,
+                    json=request_data,
+                    headers={"Content-Type": "application/json"},
+                ) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+
+            if result.get("code") != 0:
+                error_msg = result.get("msg", "Unknown error")
+                _LOGGER.error("Token error: %s (code: %s)", error_msg, result.get("code"))
+                raise DeyeCloudAuthError(error_msg)
+
+            data = result.get("data", {})
+            self._access_token = data.get("access_token")
+            
+            # Token expires after 60 days according to docs
+            expires_in = 60 * 24 * 60 * 60  # 60 days in seconds
+            self._token_expiry = time.time() + expires_in - 86400  # Refresh 1 day early
+            
+            if not self._access_token:
+                raise DeyeCloudAuthError("Failed to obtain access token")
+            
+            _LOGGER.debug("Access token obtained successfully")
+            return self._access_token
+
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Connection error during token request: %s", err)
+            raise DeyeCloudApiError(f"Connection error: {err}") from err
+        except asyncio.TimeoutError as err:
+            _LOGGER.error("Timeout during token request")
+            raise DeyeCloudApiError("Request timeout") from err
 
     async def get_station_list(self) -> List[Dict[str, Any]]:
         """Get list of stations."""
-        result = await self._request("POST", "/v1.0/station/list")
+        result = await self._request("POST", "/station/list")
         return result.get("stationList", [])
 
     async def get_station_list_with_devices(self) -> List[Dict[str, Any]]:
         """Get list of stations with their devices."""
-        result = await self._request("POST", "/v1.0/station/listWithDevice")
+        result = await self._request("POST", "/station/listWithDevice")
         return result.get("stationList", [])
 
     async def get_device_list(self) -> List[Dict[str, Any]]:
         """Get list of devices."""
-        result = await self._request("POST", "/v1.0/device/list")
+        result = await self._request("POST", "/device/list")
         return result.get("deviceList", [])
 
     async def get_device_latest_data(self, device_sns: List[str]) -> Dict[str, Any]:
@@ -157,19 +176,19 @@ class DeyeCloudClient:
             raise ValueError("Maximum 10 devices per request")
         
         data = {"deviceSnList": device_sns}
-        result = await self._request("POST", "/v1.0/device/latest", data=data)
+        result = await self._request("POST", "/device/latest", data=data)
         return result
 
     async def get_station_latest_data(self, station_id: str) -> Dict[str, Any]:
         """Get latest data for a station."""
         data = {"stationId": station_id}
-        result = await self._request("POST", "/v1.0/station/latest", data=data)
+        result = await self._request("POST", "/station/latest", data=data)
         return result
 
     async def get_device_measure_points(self, device_sn: str) -> List[str]:
         """Get available measure points for a device."""
         data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/v1.0/device/measurePoints", data=data)
+        result = await self._request("POST", "/device/measurePoints", data=data)
         return result.get("measurePoints", [])
 
     async def get_device_history(
@@ -193,19 +212,19 @@ class DeyeCloudClient:
             "endTime": end_time,
             "timeType": time_type,
         }
-        result = await self._request("POST", "/v1.0/device/history", data=data)
+        result = await self._request("POST", "/device/history", data=data)
         return result
 
     async def get_battery_config(self, device_sn: str) -> Dict[str, Any]:
         """Get battery configuration."""
         data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/v1.0/config/battery", data=data)
+        result = await self._request("POST", "/config/battery", data=data)
         return result
 
     async def get_system_config(self, device_sn: str) -> Dict[str, Any]:
         """Get system configuration."""
         data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/v1.0/config/system", data=data)
+        result = await self._request("POST", "/config/system", data=data)
         return result
 
     async def set_battery_mode(
@@ -213,7 +232,7 @@ class DeyeCloudClient:
     ) -> Dict[str, Any]:
         """Enable or disable battery charge mode."""
         data = {"deviceSn": device_sn, "chargeMode": charge_mode}
-        result = await self._request("POST", "/v1.0/order/battery/modeControl", data=data)
+        result = await self._request("POST", "/order/battery/modeControl", data=data)
         return result
 
     async def set_work_mode(
@@ -226,7 +245,7 @@ class DeyeCloudClient:
             work_mode: 'SELLING_FIRST', 'ZERO_EXPORT_TO_LOAD', or 'ZERO_EXPORT_TO_CT'
         """
         data = {"deviceSn": device_sn, "workMode": work_mode}
-        result = await self._request("POST", "/v1.0/order/sys/workMode/update", data=data)
+        result = await self._request("POST", "/order/sys/workMode/update", data=data)
         return result
 
     async def set_energy_pattern(
@@ -239,7 +258,7 @@ class DeyeCloudClient:
             energy_pattern: 'BATTERY_FIRST' or 'LOAD_FIRST'
         """
         data = {"deviceSn": device_sn, "energyPattern": energy_pattern}
-        result = await self._request("POST", "/v1.0/order/sys/energyPattern/update", data=data)
+        result = await self._request("POST", "/order/sys/energyPattern/update", data=data)
         return result
 
     async def close(self) -> None:
