@@ -43,17 +43,25 @@ A custom Home Assistant integration for Deye Cloud solar inverters and energy st
 Before setting up the integration, you need to:
 
 1. Create a Deye Cloud account at [https://www.deyecloud.com](https://www.deyecloud.com)
-2. Register your inverter/logger with your Deye Cloud account
-3. Create an application in the [Deye Cloud Developer Portal](https://developer.deyecloud.com/app)
-4. Note down your **App ID** and **App Secret**
+2. Note which datacenter/region you selected during registration:
+   - **Europe, EMEA, Asia-Pacific** → Select "EU" region
+   - **Americas** → Select "US" region
+3. Register your inverter/logger with your Deye Cloud account
+4. Create an application in the [Deye Cloud Developer Portal](https://developer.deyecloud.com/app)
+5. Note down your **App ID** and **App Secret**
 
 ### Setup
 
 1. Go to **Settings** → **Devices & Services** → **Add Integration**
 2. Search for "Deye Cloud"
-3. Enter your **App ID** and **App Secret**
-4. Set your desired **Update Interval** (default: 60 seconds, minimum: 30 seconds)
-5. Click **Submit**
+3. Fill in the configuration:
+   - **Region**: Select your datacenter (EU or US)
+   - **App ID**: Your application ID from the developer portal
+   - **App Secret**: Your application secret from the developer portal
+   - **Email**: Your Deye Cloud account email
+   - **Password**: Your Deye Cloud account password
+   - **Update Interval**: How often to fetch data (default: 60 seconds, minimum: 30)
+4. Click **Submit**
 
 The integration will automatically discover all stations and devices associated with your account.
 
@@ -154,10 +162,12 @@ All energy sensors are compatible with Home Assistant's Energy Dashboard. Add th
 
 ### Authentication Errors
 
-If you see "Invalid App ID or App Secret":
-1. Verify your credentials in the [Developer Portal](https://developer.deyecloud.com/app)
-2. Ensure your App ID and App Secret are copied correctly (no extra spaces)
-3. Check that your application is active in the developer portal
+If you see "Invalid credentials":
+1. Verify your **email and password** work in the Deye Cloud mobile app or website
+2. Check your **App ID and App Secret** in the [Developer Portal](https://developer.deyecloud.com/app)
+3. Ensure you selected the correct **region** (EU vs US)
+4. Make sure your application status is **"Open"** in the developer portal
+5. Check Home Assistant logs for detailed error messages
 
 ### Connection Errors
 
