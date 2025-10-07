@@ -90,10 +90,12 @@ class DeyeCloudClient:
                         result = await response.json()
 
             # Check API response code (0 and 1000000 are success codes)
-            if result.get("code") not in [0, 1000000]:
+            # Handle both string and integer codes
+            code = result.get("code")
+            if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
-                _LOGGER.error("API error: %s (code: %s)", error_msg, result.get("code"))
-                if result.get("code") in [1001, 1002, 1003]:  # Auth errors
+                _LOGGER.error("API error: %s (code: %s)", error_msg, code)
+                if code in [1001, 1002, 1003, "1001", "1002", "1003"]:  # Auth errors
                     raise DeyeCloudAuthError(error_msg)
                 raise DeyeCloudApiError(error_msg)
 
@@ -131,14 +133,16 @@ class DeyeCloudClient:
                     response.raise_for_status()
                     result = await response.json()
 
-            _LOGGER.debug("Token response: code=%s, msg=%s", result.get("code"), result.get("msg"))
+            _LOGGER.debug("Token response: code=%s (type=%s), msg=%s", 
+                         result.get("code"), type(result.get("code")), result.get("msg"))
 
             # Check for success (Deye uses both 0 and 1000000 as success codes)
-            if result.get("code") not in [0, 1000000]:
+            # Handle both string and integer codes
+            code = result.get("code")
+            if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
-                error_code = result.get("code")
-                _LOGGER.error("Token request failed: %s (code: %s)", error_msg, error_code)
-                raise DeyeCloudAuthError(f"{error_msg} (code: {error_code})")
+                _LOGGER.error("Token request failed: %s (code: %s)", error_msg, code)
+                raise DeyeCloudAuthError(f"{error_msg} (code: {code})")
 
             data = result.get("data", {})
             self._access_token = data.get("access_token")
